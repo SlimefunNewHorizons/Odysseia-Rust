@@ -222,3 +222,22 @@ This project is a sovereign fork maintained by [**JackStar6677-1**](https://gith
 - **Original Project:** Created by the upstream authors and the open-source community.
 - **DrakesCraft Optimizations:** Modernized for Paper/Purpur 1.21.11+, Java 21, high concurrency, asynchronous safety, and exploit/duplication prevention.
 - **License:** Distributed under the original **GNU General Public License v3.0 (GPLv3)** (or original upstream license). See the [LICENSE](LICENSE) file for complete terms.
+
+## Native engine status (honest audit, 2026-10)
+
+- Shared library: `libodysseia_ffi.so` (crate `odysseia-ffi`, C ABI, **ABI v1**, `odysseia_abi_version()`).
+- Every exported function is wrapped in `catch_unwind`; no panic crosses the FFI boundary. Strings returned by Rust are freed with `odysseia_free_string`.
+- **Currently nothing in the Java plugins calls the library.** `OdysseiaNativeLoader` (Odysseia) is dead code and binds a symbol that does not exist (`odysseia_check_redstone_clock`; the real one is `odysseia_evaluate_clock`). The old exports (boss aura for one player, chat filter, troll text, TPS text) are tiny calls that do not beat Java once FFI overhead is counted.
+- The GC does not go away: the goal is only to reduce allocation pressure and pauses on hot paths.
+
+### New in ABI v1 (this change)
+- `odysseia_pulse_*`: sliding-window pulse counter for the redstone clock guard (fixed ring buffer per block, no per-pulse allocation, `sweep` bounds memory, fails open when full). Semantics are tested against a literal port of Java `PulseWindow` (20k random pulses, identical counts).
+- `odysseia_aura_batch`: one call per tick for all players vs a boss (instead of one call per player).
+
+### Pending (not done, nothing enabled by default)
+- Java bridge for the pulse engine in `AutomationGuardListener` (branch `port-26x` of Odysseia only, Java 25 / final FFM; **never** on the Java 21 line used by Dallas), behind `automation-guard.native.enabled: false`.
+- Reproducible Java-vs-Rust benchmark (per-call cost incl. FFM downcall). Until it shows a win the native path stays off.
+- Server-side validation on a real T2 server.
+- Legacy `RedstoneClockGuard` (`odysseia_evaluate_clock`) never resets its window unless `odysseia_clock_reset_window()` is called; do not use it for production decisions.
+
+Build: `cargo build --release -p odysseia-ffi` (`panic = "unwind"` is required). Tests: `cargo test`.

@@ -1,3 +1,5 @@
+pub mod pulse;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -54,12 +56,12 @@ impl RedstoneClockGuard {
         }
 
         let key = (x, y, z);
-        let mut ticks_map = self.tick_counts.write().unwrap();
+        let mut ticks_map = self.tick_counts.write().unwrap_or_else(|e| e.into_inner());
         let pulse_count = ticks_map.entry(key).or_insert(0);
         *pulse_count += 1;
 
         if *pulse_count >= self.config.min_pulses || *pulse_count >= self.config.max_pulses {
-            let mut warnings_map = self.warning_counts.write().unwrap();
+            let mut warnings_map = self.warning_counts.write().unwrap_or_else(|e| e.into_inner());
             let warnings = warnings_map.entry(key).or_insert(0);
 
             if *warnings >= self.config.max_warnings_before_break {
@@ -78,7 +80,7 @@ impl RedstoneClockGuard {
     }
 
     pub fn reset_window(&self) {
-        self.tick_counts.write().unwrap().clear();
+        self.tick_counts.write().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }
 

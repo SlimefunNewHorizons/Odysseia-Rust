@@ -37,3 +37,33 @@ impl Vector3D {
 pub fn is_in_boss_aura(boss_pos: Vector3D, player_pos: Vector3D, aura_radius: f64) -> bool {
     boss_pos.distance_squared(&player_pos) <= (aura_radius * aura_radius)
 }
+
+/// Batch aura test: `points` is `[x0,y0,z0,x1,y1,z1,...]`; writes 1/0 per point
+/// into `out` and returns the number of hits. One call per tick instead of one per player.
+pub fn aura_hits(boss: Vector3D, radius: f64, points: &[f64], out: &mut [u8]) -> usize {
+    let r2 = radius * radius;
+    let mut hits = 0;
+    for (p, o) in points.chunks_exact(3).zip(out.iter_mut()) {
+        let (dx, dy, dz) = (p[0] - boss.x, p[1] - boss.y, p[2] - boss.z);
+        let inside = dx * dx + dy * dy + dz * dz <= r2;
+        *o = inside as u8;
+        hits += inside as usize;
+    }
+    hits
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn batch_matches_single() {
+        let boss = Vector3D::new(0.0, 64.0, 0.0);
+        let pts = [1.0, 64.0, 1.0, 50.0, 64.0, 0.0, 0.0, 64.0, 5.0];
+        let mut out = [9u8; 3];
+        assert_eq!(aura_hits(boss, 5.0, &pts, &mut out), 2);
+        for (i, p) in pts.chunks(3).enumerate() {
+            assert_eq!(out[i] == 1, is_in_boss_aura(boss, Vector3D::new(p[0], p[1], p[2]), 5.0));
+        }
+    }
+}
